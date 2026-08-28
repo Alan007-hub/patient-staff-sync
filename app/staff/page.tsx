@@ -1,22 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase, Patient, getStatus } from "@/lib/supabase";
-
-// Config array
-const FIELD_LABELS: [keyof Patient, string][] = [
-  ["middle_name", "Middle Name"],
-  ["date_of_birth", "Date of Birth"],
-  ["gender", "Gender"],
-  ["phone", "Phone"],
-  ["email", "Email"],
-  ["address", "Address"],
-  ["preferred_language", "Preferred Language"],
-  ["nationality", "Nationality"],
-  ["emergency_contact_name", "Emergency Contact"],
-  ["emergency_contact_relationship", "Relationship"],
-  ["religion", "Religion"],
-];
+import { supabase, Patient } from "@/lib/supabase";
+import PatientCard from "@/components/PatientCard";
 
 // hold collection of patients keyed by id
 export default function StaffPage() {
@@ -46,7 +32,8 @@ export default function StaffPage() {
         for (const row of data as Patient[]) {
           map[row.id] = row;
         }
-        setPatients(map);
+        
+        setPatients((prev) => ({ ...map, ...prev }));
         setLoading(false);
       });
   }, []);
@@ -59,7 +46,20 @@ export default function StaffPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "patient_sessions" },
         (payload) => {
+          
+          if (payload.eventType === "DELETE") {
+            const oldRow = payload.old as { id?: string };
+            if (!oldRow?.id) return;
+            setPatients((prev) => {
+              const next = { ...prev };
+              delete next[oldRow.id!];
+              return next;
+            });
+            return;
+          }
+
           const row = payload.new as Patient;
+          if (!row?.id) return;
           setPatients((prev) => ({ ...prev, [row.id]: row }));
         }
       )
@@ -87,33 +87,11 @@ export default function StaffPage() {
 
       {loading && <p>Loading patients…</p>}
       {!loading && list.length === 0 && <p>No patients yet.</p>}
-      {/* {list.length === 0 && <p>No patients yet.</p>} */}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {list.map((p) => {
-          const status = getStatus(p);
-          const color =
-            status === "Active"
-              ? "text-green-700"
-              : status === "Idle"
-              ? "text-black"
-              : "text-green-900";
-          return (
-            <div key={p.id} className="border border-black bg-white p-4">
-              <div className="flex justify-between items-baseline mb-2">
-                <h2 className="font-bold">
-                  {p.first_name || "New"} {p.last_name}
-                </h2>
-                <span className={`text-sm font-bold ${color}`}>{status}</span>
-              </div>
-              {FIELD_LABELS.map(([key, label]) => (
-                <p key={key} className="text-sm">
-                  <span className="font-bold">{label}:</span> {p[key] || "—"}
-                </p>
-              ))}
-            </div>
-          );
-        })}
+        {list.map((p) => (
+          <PatientCard key={p.id} patient={p} />
+        ))}
       </div>
     </main>
   );
