@@ -5,7 +5,7 @@ export default function Home() {
     <main className="mx-auto max-w-md p-8 text-center">
       <h1 className="mb-2 text-2xl font-bold">Patient Intake</h1>
       <p className="mb-6 text-sm text-gray-600">
-        Open both views in separate tabs to see them sync.
+        
       </p>
       <div className="flex flex-col gap-3">
         <Link
