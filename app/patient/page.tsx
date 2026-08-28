@@ -26,10 +26,45 @@ const EMPTY = Object.fromEntries(FIELDS.map((f) => [f.name, ""]));
 export default function PatientPage() {
   const [data, setData] = useState<Record<string, string>>(EMPTY);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [id, setId] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  
+  //resume session 
+  useEffect(() => {
+    const existing = localStorage.getItem("session_id");
+    if (existing) {
+      supabase.from("patient_sessions").select("*").eq("id", existing).single().then(({ data: row }) => {
+        if (row) {
+          setId(row.id);
+          setSubmitted(!!row.submitted_at);
+          setData({ ...EMPTY, ...row });
+        }
+      });
+    } else {
+      supabase.from("patient_sessions").insert({}).select("id").single().then(({ data: row }) => {
+        if (row) {
+          localStorage.setItem("session_id", row.id);
+          setId(row.id);
+        }
+      });
+    }
+  }, []);
+  
+  //save to supabase after 500ms of inactivity
+  useEffect(() => {
+    if (!id) return;
+    const timer = setTimeout(async () => {
+      await supabase.from("patient_sessions").update(data).eq("id", id);
+      setSaved(true);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [data, id]);
 
 //Handles input changes
   function handleChange(name: string, value: string) {
     setData({ ...data, [name]: value });
+    setSaved(false);
   }
 
   //Validates the input data throughtout the form
@@ -44,19 +79,27 @@ export default function PatientPage() {
   }
   
   //When submitted, validates the form
-  function handleSubmit(e: React.FormEvent) {
+   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const errs = validate();
     setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-    
+    if (Object.keys(errs).length > 0 || !id) return;
+    await supabase.from("patient_sessions").update({ ...data, submitted_at: new Date().toISOString() }).eq("id", id);
+    setSubmitted(true);
   }
+
+  if (submitted) {
+    return <main className="p-8 text-center">Thank you. Your information has been submitted.</main>;
+  }
+
 
 
   return (
     <main className="p-6 max-w-lg mx-auto">
       <h1 className="text-2xl font-bold mb-1">Patient Intake Form</h1>
-
+      
+      <p className="text-sm mb-6">{saved ? "Saved" : "Saving..."}</p>
+      <p className="text-xs text-gray-400">debug id: {id ?? "null"}</p> 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {FIELDS.map((f) => (
           <div key={f.name}>
